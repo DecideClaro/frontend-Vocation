@@ -153,8 +153,8 @@ export class RegisterComponent {
       return;
     }
 
-    if (this.registerData.password.length < 6) {
-      this.feedback = 'La contraseña debe tener al menos 6 caracteres.';
+    if (this.registerData.password.length < 8) {
+      this.feedback = 'La contraseña debe tener al menos 8 caracteres.';
       return;
     }
 
@@ -162,6 +162,28 @@ export class RegisterComponent {
       this.feedback = 'Las contraseñas no coinciden.';
       return;
     }
+
+    // Validar que la contraseña contenga al menos una letra mayúscula, una minúscula, un número 
+    const uppercasePattern = /[A-Z]/;
+    const lowercasePattern = /[a-z]/;
+    const numberPattern = /[0-9]/;
+    //const specialCharPattern = /[!@#$%^&*(),.?":{}|<>]/; // osea no hay ps pero bueno la vida
+
+    if (!uppercasePattern.test(this.registerData.password)) {
+      this.feedback = 'La contraseña debe contener al menos una letra mayúscula.';
+      return;
+    }
+
+    if (!lowercasePattern.test(this.registerData.password)) {
+      this.feedback = 'La contraseña debe contener al menos una letra minúscula.';
+      return;
+    }
+
+    if (!numberPattern.test(this.registerData.password)) {
+      this.feedback = 'La contraseña debe contener al menos un número.';
+      return;
+    }
+
 
     // pasamos todas las validaciones
     this.success = true;

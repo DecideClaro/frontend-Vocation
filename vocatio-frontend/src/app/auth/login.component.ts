@@ -24,7 +24,7 @@ import { authFormStyles } from './auth-form.styles';
             #emailCtrl="ngModel"
             required
             autocomplete="email"
-            placeholder="correo@ejemplo.com"
+            placeholder="tiasusy1963@yopmail.com"
             [class.invalid]="loginForm.submitted && emailCtrl.invalid"
           />
           <small
@@ -45,7 +45,7 @@ import { authFormStyles } from './auth-form.styles';
             required
             minlength="6"
             autocomplete="current-password"
-            placeholder="••••••••"
+            placeholder="12345678"
           [class.invalid]="
             loginForm.submitted && (passwordCtrl.invalid || credentials.password.length < 6)
           "
