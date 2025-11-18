@@ -11,5 +11,7 @@ export const PROFILE_ENDPOINTS = {
 };
 
 export const TEST_ENDPOINTS = {
-  recommendations: `${API_BASE_URL}/api/learning-resources/by-interests`
+  recommendations: `${API_BASE_URL}/api/learning-resources/by-interests`,
+  questions: `${API_BASE_URL}/api/vocational-test/questions`,
+  submit: `${API_BASE_URL}/api/vocational-test/submit`
 };
