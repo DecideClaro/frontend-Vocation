@@ -11,7 +11,7 @@ export const PROFILE_ENDPOINTS = {
 };
 
 export const TEST_ENDPOINTS = {
-  recommendations: `${API_BASE_URL}/api/learning-resources/by-interests`,
-  questions: `${API_BASE_URL}/api/vocational-test/questions`,
-  submit: `${API_BASE_URL}/api/vocational-test/submit`
+  create: `${API_BASE_URL}/api/v1/assessments`, // POST: crea el test/intento para el usuario
+  questions: (assessmentId: string) => `${API_BASE_URL}/api/v1/assessments/${assessmentId}`,
+  submit: (assessmentId: string) => `${API_BASE_URL}/api/v1/assessments/${assessmentId}/submit`
 };
