@@ -1,11 +1,13 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core'; // para que salga el validando zoneless
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { SessionService } from '../../../core/services/session.service';
 import { LoginPayload } from '../../../core/validators/models/auth.models';
 import { authCardStyles } from '../../../shared/components/auth-card.styles';
+import { finalize } from 'rxjs';
 
 @Component({
   selector: 'app-login-page',
@@ -69,8 +71,15 @@ import { authCardStyles } from '../../../shared/components/auth-card.styles';
           </div>
         </label>
 
-        <button class="primary-action" type="submit" [disabled]="credentials.invalid || loading">
-          {{ loading ? 'Validando...' : 'Entrar' }}
+        <button
+          class="primary-action"
+          type="submit"
+          [disabled]="credentials.invalid || loading"
+          [class.loading]="loading"
+          [attr.aria-busy]="loading"
+        >
+          <span class="loading-indicator" aria-hidden="true" *ngIf="loading"></span>
+          <span class="label">{{ loading ? 'Validando...' : 'Entrar' }}</span>
         </button>
       </form>
 
@@ -97,6 +106,7 @@ export class LoginPageComponent {
   private readonly authService = inject(AuthService);
   private readonly session = inject(SessionService);
   private readonly router = inject(Router);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   credentials = this.fb.group({
     email: ['', [Validators.required, Validators.email]],
@@ -119,20 +129,36 @@ export class LoginPageComponent {
     this.loading = true;
     this.feedback = '';
 
-    this.authService.login(payload).subscribe({
-      next: (response) => {
-        this.success = true;
-        this.feedback = response.message;
-        this.session.saveTokens(response.tokens);
-        this.router.navigate(['/home']);
-      },
-      error: (error: Error) => {
-        this.success = false;
-        this.feedback = error.message;
-      },
-      complete: () => {
-        this.loading = false;
-      }
-    });
+    this.authService
+      .login(payload)
+      .pipe(
+        finalize(() => {
+          this.loading = false;
+          this.cdr.detectChanges();
+        })
+      )
+      .subscribe({
+        next: (response) => {
+          this.success = true;
+          this.feedback = response.message;
+          this.session.saveTokens(response.tokens);
+          this.router.navigate(['/home']);
+        },
+        error: (error: HttpErrorResponse) => {
+          this.success = false;
+          const message = this.extractErrorMessage(error);
+          this.feedback = message;
+          if (error.status === 401) {
+            this.router.navigate(['/auth/invalid-credentials'], {
+              state: { message }
+            });
+          }
+        }
+      });
+  }
+
+  private extractErrorMessage(error: HttpErrorResponse): string {
+    const body = error.error as { message?: string } | null;
+    return body?.message ?? error.message ?? 'Ocurrió un error inesperado';
   }
 }

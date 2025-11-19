@@ -2,7 +2,13 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { PROFILE_ENDPOINTS } from '../constants/api.constants';
-import { ProfilePatchPayload, ProfileUpdatePayload, UserProfile } from '../validators/models/profile.models';
+import {
+  AccountDeletionPayload,
+  AccountDeletionResponse,
+  ProfilePatchPayload,
+  ProfileUpdatePayload,
+  UserProfile
+} from '../validators/models/profile.models';
 
 @Injectable({ providedIn: 'root' })
 export class ProfileService {
@@ -18,5 +24,9 @@ export class ProfileService {
 
   patchPersonalData(payload: ProfilePatchPayload): Observable<{ message: string; profile: UserProfile }> {
     return this.http.patch<{ message: string; profile: UserProfile }>(PROFILE_ENDPOINTS.me, payload);
+  }
+
+  deleteAccount(payload: AccountDeletionPayload): Observable<AccountDeletionResponse> {
+    return this.http.delete<AccountDeletionResponse>(PROFILE_ENDPOINTS.me, { body: payload });
   }
 }

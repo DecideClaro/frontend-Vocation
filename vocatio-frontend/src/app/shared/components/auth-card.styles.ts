@@ -76,6 +76,47 @@ export const authCardStyles = `
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+.primary-action[disabled] {
+  opacity: 0.8;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.primary-action .label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.primary-action .loading-indicator {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: spin 0.85s linear infinite;
+}
+
+.primary-action.loading {
+  pointer-events: none;
+  box-shadow: none;
+}
+
+.primary-action:not(.loading) .loading-indicator {
+  display: none;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .primary-action:focus-visible {
   outline: 3px solid rgba(99, 102, 241, 0.6);
   outline-offset: 2px;

@@ -87,6 +87,113 @@ export const homePageStyles = `
   color: #fbbf24;
 }
 
+.profile-panel {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  width: min(360px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 20px 35px rgba(2, 6, 23, 0.35);
+}
+
+.profile-header h3 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.profile-email {
+  margin: 0.25rem 0;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.profile-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: #cbd5f5;
+  font-size: 0.95rem;
+}
+
+.profile-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.profile-feedback {
+  margin: 0;
+  color: #facc15;
+  font-size: 0.9rem;
+}
+
+.profile-form {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.form-header h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.ghost {
+  background: transparent;
+  border: none;
+  color: #a5b4fc;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: #cbd5f5;
+}
+
+.field input,
+.field textarea {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: #f8fafc;
+  font-size: 0.95rem;
+}
+
+.field textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.field-error {
+  color: #f87171;
+  font-size: 0.75rem;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.danger-action {
+  border-color: rgba(251, 113, 133, 0.5);
+  color: #fecdd3;
+}
+
 .status-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
