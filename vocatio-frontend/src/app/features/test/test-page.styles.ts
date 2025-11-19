@@ -138,6 +138,44 @@ export const testPageStyles = `
   box-shadow: 0 10px 20px rgba(37, 99, 235, 0.35);
 }
 
+.insight-notes {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.insight-notes label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.95rem;
+  color: #cbd5f5;
+}
+
+.insight-notes textarea {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.6);
+  color: #f8fafc;
+  resize: none;
+  padding: 0.75rem;
+}
+
+.insight-note-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+
+.field-hint {
+  color: #94a3b8;
+}
+
+.field-error {
+  color: #fb7185;
+}
+
 .actions-section {
   display: flex;
   justify-content: flex-end;
@@ -200,6 +238,30 @@ export const testPageStyles = `
 .results-actions {
   display: flex;
   gap: 0.75rem;
+}
+
+.insights-panel {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.insights-loading {
+  color: #38bdf8;
+  font-size: 0.9rem;
+}
+
+.insights-careers ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.profile-summary {
+  color: #e2e8f0;
+  line-height: 1.5;
 }
 
 .empty {

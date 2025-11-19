@@ -17,3 +17,6 @@ export const TEST_ENDPOINTS = {
   recommendations: `${API_BASE_URL}/api/v1/recommendations`
 };
 
+export const AI_ENDPOINTS = {
+  vocationalInsights: `${API_BASE_URL}/ai/deepseek` // Proxy que conversa con DeepSeek para generar el perfil
+};
