@@ -33,3 +33,18 @@ export interface TestResult {
   topAreas: string[];
   completedAt: string;
 }
+
+export interface VocationalInsightsPayload {
+  answers: Array<{
+    questionId: string;
+    optionId: string;
+    value: string;
+  }>;
+  notes?: string;
+}
+
+export interface VocationalInsights {
+  mbtiProfile: string;
+  suggestedCareers: string[];
+  profileSummary: string;
+}

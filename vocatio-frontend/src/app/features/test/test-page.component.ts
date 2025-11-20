@@ -1,10 +1,19 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
+import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { TestOption, TestQuestion, TestResult, TestSubmission } from '../../core/models/learning.models';
+import {
+  TestOption,
+  TestQuestion,
+  TestResult,
+  TestSubmission,
+  VocationalInsights
+} from '../../core/validators/models/learning.models';
 import { SessionService } from '../../core/services/session.service';
 import { TestService } from '../../core/services/test.service';
 import { testPageStyles } from './test-page.styles';
+import { FEATURE_FLAGS } from '../../core/constants/feature-flags.constants';
+import { InsightsService } from '../../core/services/insights.service';
 
 const FALLBACK_QUESTIONS: TestQuestion[] = [
   {
@@ -112,7 +121,7 @@ const FALLBACK_QUESTIONS: TestQuestion[] = [
 @Component({
   selector: 'app-test-page',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ReactiveFormsModule],
   template: `
     <main class="test-shell">
       <section class="test-hero">
@@ -156,6 +165,21 @@ const FALLBACK_QUESTIONS: TestQuestion[] = [
               {{ option.text }}
             </button>
           </div>
+          <div class="insight-notes">
+            <label>
+              <span>¿Quieres contarnos algo más sobre tus intereses?</span>
+              <textarea
+                rows="4"
+                maxlength="400"
+                [formControl]="opinionControl"
+                placeholder="Comparte detalles adicionales que quieras que la IA considere."
+              ></textarea>
+            </label>
+            <div class="insight-note-meta">
+              <small class="field-hint">{{ opinionControl.value?.length || 0 }}/400 caracteres</small>
+              <small class="field-error" *ngIf="opinionControl.hasError('maxlength')">Máximo 400 caracteres.</small>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -186,6 +210,23 @@ const FALLBACK_QUESTIONS: TestQuestion[] = [
           <button class="primary-action" type="button" (click)="goToHome()">Ver recomendaciones</button>
           <button class="secondary-action" type="button" (click)="retakeTest()">Repetir test</button>
         </div>
+        <section class="insights-panel">
+          <h3>Análisis de DeepSeek</h3>
+          <p class="insights-loading" *ngIf="insightsLoading">Generando tu perfil con IA...</p>
+          <p class="field-error" *ngIf="insightsError && !insightsLoading">{{ insightsError }}</p>
+          <ng-container *ngIf="insights && !insightsLoading">
+            <p><strong>Personalidad MBTI: </strong>{{ insights.mbtiProfile || 'Sin datos' }}</p>
+            <div class="insights-careers">
+              <strong>Carreras sugeridas</strong>
+              <ul>
+                <li *ngFor="let career of insights.suggestedCareers">{{ career }}</li>
+              </ul>
+            </div>
+            <p class="profile-summary">
+              {{ insights.profileSummary }}
+            </p>
+          </ng-container>
+        </section>
       </section>
 
       <p class="empty" *ngIf="!loading && !showResults && !questions.length">
@@ -207,11 +248,17 @@ export class TestPageComponent implements OnInit {
   currentQuestionIndex = 0;
   topAreas: string[] = [];
   usingFallback = false;
+  private readonly useRemoteTestApi = FEATURE_FLAGS.useRemoteTestApi;
+  opinionControl = new FormControl('', [Validators.maxLength(400)]);
+  insights?: VocationalInsights;
+  insightsLoading = false;
+  insightsError = '';
 
   constructor(
     private testService: TestService,
     private session: SessionService,
-    private router: Router
+    private router: Router,
+    private insightsService: InsightsService
   ) {}
 
   ngOnInit(): void {
@@ -244,6 +291,14 @@ export class TestPageComponent implements OnInit {
     this.usingFallback = false;
     this.topAreas = [];
     this.assessmentId = undefined;
+    this.resetInsights();
+    this.opinionControl.reset('');
+
+    if (!this.useRemoteTestApi) {
+      this.statusMessage = 'Modo demo: usamos preguntas locales mientras restauramos el backend.';
+      this.loadFallbackQuestions();
+      return;
+    }
 
     this.testService.createAssessment(token).subscribe({
       next: ({ assessmentId }) => this.loadQuestions(token, assessmentId),
@@ -286,6 +341,13 @@ export class TestPageComponent implements OnInit {
     this.answersByQuestion = {};
     this.answerValues = {};
     this.showResults = false;
+    this.opinionControl.enable();
+  }
+
+  private resetInsights(): void {
+    this.insights = undefined;
+    this.insightsError = '';
+    this.insightsLoading = false;
   }
 
   selectOption(option: TestOption): void {
@@ -342,6 +404,7 @@ export class TestPageComponent implements OnInit {
         this.topAreas = result.topAreas;
         this.showResults = true;
         this.statusMessage = 'Resultados listos.';
+        this.requestInsights();
       },
       error: (error: Error) => {
         this.statusMessage = `${error.message}. Se mostrarán resultados locales.`;
@@ -378,6 +441,8 @@ export class TestPageComponent implements OnInit {
     this.topAreas = sortedAreas.map(([areaCode]) => areaNames[areaCode] ?? areaCode);
     this.showResults = true;
     this.saveTestAttempt();
+    this.statusMessage = 'Resultados listos (modo local).';
+    this.requestInsights();
   }
 
   private saveTestAttempt(): void {
@@ -398,5 +463,48 @@ export class TestPageComponent implements OnInit {
 
   retakeTest(): void {
     this.prepareTest();
+  }
+
+  private requestInsights(): void {
+    const answersPayload = this.questions
+      .map((question) => {
+        const optionId = this.answersByQuestion[question.id];
+        const value = this.answerValues[question.id];
+        if (!optionId || !value) {
+          return null;
+        }
+        return {
+          questionId: question.id,
+          optionId,
+          value
+        };
+      })
+      .filter((item): item is { questionId: string; optionId: string; value: string } => Boolean(item));
+
+    if (!answersPayload.length) {
+      return;
+    }
+
+    const notes = this.opinionControl.value?.trim();
+    this.opinionControl.disable();
+
+    this.insightsLoading = true;
+    this.insightsError = '';
+
+    this.insightsService
+      .generateVocationalInsights({
+        answers: answersPayload,
+        notes: notes || undefined
+      })
+      .subscribe({
+        next: (response) => {
+          this.insights = response;
+          this.insightsLoading = false;
+        },
+        error: (error: Error) => {
+          this.insightsError = error.message;
+          this.insightsLoading = false;
+        }
+      });
   }
 }

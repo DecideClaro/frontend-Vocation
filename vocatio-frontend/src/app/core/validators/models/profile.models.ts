@@ -19,3 +19,13 @@ export interface ProfilePatchPayload {
   name: string;
   preferences: Record<string, boolean>;
 }
+
+export interface AccountDeletionPayload {
+  confirmation: string;
+  currentPassword: string;
+}
+
+export interface AccountDeletionResponse {
+  message: string;
+  pendingDeletion: boolean;
+}
