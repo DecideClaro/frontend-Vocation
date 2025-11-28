@@ -1,10 +1,19 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
+import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { TestOption, TestQuestion, TestResult, TestSubmission } from '../../core/models/learning.models';
+import {
+  TestOption,
+  TestQuestion,
+  TestResult,
+  VocationalInsights
+} from '../../core/validators/models/learning.models';
+import { finalize } from 'rxjs';
 import { SessionService } from '../../core/services/session.service';
 import { TestService } from '../../core/services/test.service';
 import { testPageStyles } from './test-page.styles';
+import { FEATURE_FLAGS } from '../../core/constants/feature-flags.constants';
+import { InsightsService } from '../../core/services/insights.service';
 
 const FALLBACK_QUESTIONS: TestQuestion[] = [
   {
@@ -112,7 +121,7 @@ const FALLBACK_QUESTIONS: TestQuestion[] = [
 @Component({
   selector: 'app-test-page',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ReactiveFormsModule],
   template: `
     <main class="test-shell">
       <section class="test-hero">
@@ -156,6 +165,21 @@ const FALLBACK_QUESTIONS: TestQuestion[] = [
               {{ option.text }}
             </button>
           </div>
+          <div class="insight-notes">
+            <label>
+              <span>¿Quieres contarnos algo más sobre tus intereses?</span>
+              <textarea
+                rows="4"
+                maxlength="400"
+                [formControl]="opinionControl"
+                placeholder="Comparte detalles adicionales que quieras que la IA considere."
+              ></textarea>
+            </label>
+            <div class="insight-note-meta">
+              <small class="field-hint">{{ opinionControl.value?.length || 0 }}/400 caracteres</small>
+              <small class="field-error" *ngIf="opinionControl.hasError('maxlength')">Máximo 400 caracteres.</small>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -175,13 +199,49 @@ const FALLBACK_QUESTIONS: TestQuestion[] = [
 
       <section class="results-card" *ngIf="!loading && showResults">
         <h2>¡Test completado!</h2>
-        <p>Estas son tus áreas principales según tus respuestas:</p>
-        <div class="results-summary">
-          <h3>Áreas recomendadas:</h3>
-          <ul>
-            <li *ngFor="let area of topAreas">{{ area }}</li>
-          </ul>
-        </div>
+        <section class="insights-panel">
+          <h3>Perfil powerd by AI</h3>
+          <p class="insights-loading" *ngIf="insightsLoading">La IA esta evaluando tu perfil...</p>
+          <p class="field-error" *ngIf="insightsError && !insightsLoading">{{ insightsError }}</p>
+          <ng-container *ngIf="insights && !insightsLoading">
+            <div class="insights-grid">
+              <div class="mbti-highlight">
+                <div class="mbti-figure">
+                  <div class="mbti-head">
+                    <span class="mbti-eyes">• •</span>
+                    <span class="mbti-mouth"></span>
+                  </div>
+                  <div class="mbti-body"></div>
+                  <div class="mbti-badge">{{ insights.mbtiProfile || 'MBTI' }}</div>
+                </div>
+                <p class="mbti-caption">Tu arquetipo MBTI según tus respuestas</p>
+              </div>
+
+              <div class="insights-detail">
+                <div class="insights-block">
+                  <h4>Carreras recomendadas</h4>
+                  <ul>
+                    <li *ngFor="let career of insights.suggestedCareers">{{ career }}</li>
+                  </ul>
+                </div>
+
+                <div class="insights-block" *ngIf="insights.qualities?.length">
+                  <h4>Cualidades que destacan</h4>
+                  <div class="qualities">
+                    <span class="quality-chip" *ngFor="let quality of insights.qualities">{{ quality }}</span>
+                  </div>
+                </div>
+
+                <div class="insights-block">
+                  <h4>Resumen del perfil</h4>
+                  <p class="profile-summary">
+                    {{ insights.profileSummary }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </ng-container>
+        </section>
         <div class="results-actions">
           <button class="primary-action" type="button" (click)="goToHome()">Ver recomendaciones</button>
           <button class="secondary-action" type="button" (click)="retakeTest()">Repetir test</button>
@@ -207,11 +267,18 @@ export class TestPageComponent implements OnInit {
   currentQuestionIndex = 0;
   topAreas: string[] = [];
   usingFallback = false;
+  private readonly useRemoteTestApi = FEATURE_FLAGS.useRemoteTestApi;
+  opinionControl = new FormControl('', [Validators.maxLength(400)]);
+  insights?: VocationalInsights;
+  insightsLoading = false;
+  insightsError = '';
 
   constructor(
     private testService: TestService,
     private session: SessionService,
-    private router: Router
+    private router: Router,
+    private insightsService: InsightsService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -244,33 +311,80 @@ export class TestPageComponent implements OnInit {
     this.usingFallback = false;
     this.topAreas = [];
     this.assessmentId = undefined;
+    this.resetInsights();
+    this.opinionControl.reset('');
 
-    this.testService.createAssessment(token).subscribe({
-      next: ({ assessmentId }) => this.loadQuestions(token, assessmentId),
-      error: (error: Error) => {
-        this.statusMessage = `${error.message}. Se usarán preguntas locales.`;
-        this.loadFallbackQuestions();
-      }
-    });
+    if (!this.useRemoteTestApi) {
+      this.statusMessage = 'Modo demo: usamos preguntas locales mientras restauramos el backend.';
+      this.loadFallbackQuestions();
+      return;
+    }
+
+    this.testService
+      .createAssessment(token)
+      .pipe(
+        finalize(() => {
+          // evitar que el spinner se quede prendido si hubo cortes o no se limpió
+          if (this.loading) {
+            this.loading = false;
+            this.cdr.detectChanges();
+          }
+        })
+      )
+      .subscribe(
+        ({ assessmentId }) => this.loadQuestions(token, assessmentId),
+        (error: any) => {
+          if (error?.status === 409) {
+            this.statusMessage = 'Ya tienes un intento en progreso. Recuperándolo...';
+            this.recoverInProgressAssessment(token);
+            return;
+          }
+          this.statusMessage = `${error?.message || 'No se pudo crear el assessment.'}. Se usarán preguntas locales.`;
+          console.error('Error creando assessment remoto', error);
+          this.loadFallbackQuestions();
+        }
+      );
   }
 
   private loadQuestions(token: string, assessmentId: string): void {
+    if (!assessmentId) {
+      this.statusMessage = 'No se pudo identificar el assessment remoto.';
+      this.loadFallbackQuestions();
+      return;
+    }
     this.assessmentId = assessmentId;
-    this.testService.fetchQuestions(assessmentId, token).subscribe({
-      next: (questions) => {
-        if (!questions.length) {
-          this.statusMessage = 'No se encontraron preguntas oficiales.';
+    this.statusMessage = 'Cargando preguntas...';
+    this.loading = true;
+    this.testService
+      .fetchQuestions(assessmentId, token)
+      .pipe(
+        finalize(() => {
+          if (this.loading) {
+            this.loading = false;
+            this.cdr.detectChanges();
+          }
+        })
+      )
+      .subscribe(
+        ({ questions, answers }) => {
+          if (!questions.length) {
+            this.statusMessage = 'No se encontraron preguntas oficiales.';
+            this.loadFallbackQuestions();
+            return;
+          }
+          console.info('Preguntas cargadas', questions.length);
+          this.questions = questions;
+          this.restoreAnswers(answers);
+          this.loading = false;
+          this.statusMessage = '';
+          this.cdr.detectChanges();
+        },
+        (error: any) => {
+          this.statusMessage = `${error?.message || 'No se pudieron cargar las preguntas.'}. Se usarán preguntas locales.`;
+          console.error('Error obteniendo preguntas del assessment remoto', error);
           this.loadFallbackQuestions();
-          return;
         }
-        this.questions = questions;
-        this.loading = false;
-      },
-      error: (error: Error) => {
-        this.statusMessage = `${error.message}. Se usarán preguntas locales.`;
-        this.loadFallbackQuestions();
-      }
-    });
+      );
   }
 
   private loadFallbackQuestions(): void {
@@ -286,6 +400,70 @@ export class TestPageComponent implements OnInit {
     this.answersByQuestion = {};
     this.answerValues = {};
     this.showResults = false;
+    this.opinionControl.enable();
+  }
+
+  private resetInsights(): void {
+    this.insights = undefined;
+    this.insightsError = '';
+    this.insightsLoading = false;
+  }
+
+  private restoreAnswers(answers: Array<{ questionId: string; optionId: string }>): void {
+    if (!answers?.length) {
+      return;
+    }
+    answers.forEach(({ questionId, optionId }) => {
+      this.answersByQuestion[questionId] = optionId;
+      const optionValue =
+        this.questions
+          .find((q) => q.id === questionId)
+          ?.options.find((opt) => opt.id === optionId)?.value ?? optionId;
+      this.answerValues[questionId] = optionValue;
+    });
+    const firstUnansweredIndex = this.questions.findIndex((q) => !this.answersByQuestion[q.id]);
+    this.currentQuestionIndex = firstUnansweredIndex === -1 ? this.questions.length - 1 : firstUnansweredIndex;
+  }
+
+  private recoverInProgressAssessment(token: string): void {
+    this.testService.listAssessments(token).subscribe({
+      next: (assessments) => {
+        const inProgress = assessments.find((a) => a.status === 'IN_PROGRESS') || assessments[0];
+        if (!inProgress) {
+          this.statusMessage = 'No se encontró un assessment pendiente. Usando preguntas locales.';
+          this.loadFallbackQuestions();
+          return;
+        }
+
+        if (inProgress.pages?.length) {
+          // Tenemos las páginas y respuestas en la misma respuesta; evitamos otro GET
+          const mappedQuestions = inProgress.pages.flatMap((page) =>
+            page.questions.map((question) => ({
+              id: question.id,
+              question: question.title,
+              options: question.options.map((option) => ({
+                id: option.id,
+                text: option.label,
+                value: option.label
+              }))
+            }))
+          );
+          this.assessmentId = inProgress.id;
+          this.questions = mappedQuestions;
+          this.restoreAnswers(inProgress.answers || []);
+          this.loading = false;
+          return;
+        }
+
+        // Si no vienen páginas en el listado, hacemos GET al assessment puntual
+        this.loadQuestions(token, inProgress.id);
+      },
+      error: (error: any) => {
+        this.statusMessage = `${error?.message || 'No se pudo recuperar el assessment pendiente.'}. Se usarán preguntas locales.`;
+        console.error('Error listando assessments', error);
+        this.loadFallbackQuestions();
+      }
+    });
   }
 
   selectOption(option: TestOption): void {
@@ -325,29 +503,11 @@ export class TestPageComponent implements OnInit {
       return;
     }
 
-    if (!this.assessmentId) {
-      this.statusMessage = 'No se pudo identificar el intento actual.';
-      return;
-    }
-
-    const submission: TestSubmission = {
-      answers: this.questions.map((question) => this.answersByQuestion[question.id])
-    };
-
-    this.statusMessage = 'Enviando tus respuestas...';
-
-    this.testService.submitTest(this.assessmentId, token, submission).subscribe({
-      next: (result) => {
-        this.submissionResult = result;
-        this.topAreas = result.topAreas;
-        this.showResults = true;
-        this.statusMessage = 'Resultados listos.';
-      },
-      error: (error: Error) => {
-        this.statusMessage = `${error.message}. Se mostrarán resultados locales.`;
-        this.calculateResultsLocally();
-      }
-    });
+    this.statusMessage = 'Procesando tus respuestas con IA...';
+    this.resetInsights();
+    this.topAreas = [];
+    this.showResults = false;
+    this.requestInsights();
   }
 
   private calculateResultsLocally(): void {
@@ -378,6 +538,8 @@ export class TestPageComponent implements OnInit {
     this.topAreas = sortedAreas.map(([areaCode]) => areaNames[areaCode] ?? areaCode);
     this.showResults = true;
     this.saveTestAttempt();
+    this.statusMessage = 'Resultados listos (modo local).';
+    this.requestInsights();
   }
 
   private saveTestAttempt(): void {
@@ -398,5 +560,78 @@ export class TestPageComponent implements OnInit {
 
   retakeTest(): void {
     this.prepareTest();
+  }
+
+  private requestInsights(): void {
+    const answersPayload = this.questions
+      .map((question) => {
+        const optionId = this.answersByQuestion[question.id];
+        const value = this.answerValues[question.id];
+        if (!optionId || !value) {
+          return null;
+        }
+        return {
+          questionId: question.id,
+          optionId,
+          value
+        };
+      })
+      .filter((item): item is { questionId: string; optionId: string; value: string } => Boolean(item));
+
+    if (!answersPayload.length) {
+      this.statusMessage = 'Debes responder todas las preguntas antes de continuar.';
+      return;
+    }
+
+    const notes = this.opinionControl.value?.trim();
+    this.opinionControl.disable();
+
+    this.insightsLoading = true;
+    this.insightsError = '';
+    this.showResults = true;
+
+    this.insightsService
+      .generateVocationalInsights({
+        answers: answersPayload,
+        notes: notes || undefined
+      })
+      .subscribe({
+        next: (response) => {
+          this.insights = response;
+          this.insightsLoading = false;
+          this.assessmentId = response.assessmentId ?? this.assessmentId;
+          this.statusMessage = '';
+          this.fetchAssessmentResultFromServer();
+          this.cdr.detectChanges();
+        },
+        error: (error: Error) => {
+          this.insightsError = error.message;
+          this.insightsLoading = false;
+          this.statusMessage = 'No se pudieron generar insights con IA.';
+          console.error('Error generando insights con DeepSeek', error);
+          this.cdr.detectChanges();
+        }
+      });
+  }
+
+  private fetchAssessmentResultFromServer(): void {
+    if (!this.assessmentId) {
+      return;
+    }
+    const token = this.session.getAccessToken();
+    if (!token) {
+      return;
+    }
+
+    this.testService.fetchResult(this.assessmentId, token).subscribe({
+      next: (result) => {
+        this.submissionResult = result;
+        this.topAreas = result.topAreas || [];
+        this.cdr.detectChanges();
+      },
+      error: (error: Error) => {
+        console.error('Error obteniendo resultados del assessment', error);
+      }
+    });
   }
 }
