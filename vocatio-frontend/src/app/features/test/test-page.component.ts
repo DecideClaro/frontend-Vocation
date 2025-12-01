@@ -105,7 +105,11 @@ const FALLBACK_QUESTIONS: TestQuestion[] = [
                 ></textarea>
                 @if (isLastQuestion) {
                   <small class="field-hint">
-                    Complementa tus respuestas con al menos 50 caracteres para finalizar el test.
+                    Antes de iniciar el test, cuéntanos brevemente:
+                    - ¿En qué etapa estás respecto a tu elección de carrera?
+                    - ¿Qué esperas que este test te ayude a aclarar?
+
+                    Tambien puedes compartir alguna duda o decision que no encaje con las alternativas cerradas.
                     <span class="char-counter" [class.invalid]="!hasRequiredOpinion">
                       {{ opinionCharCount }}/50
                     </span>
