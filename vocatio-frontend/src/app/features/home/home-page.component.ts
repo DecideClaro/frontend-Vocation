@@ -21,17 +21,22 @@ import { UserProfile } from '../../core/validators/models/profile.models';
           <p class="eyebrow">Descubre tu camino</p>
           <h1>Explora tus resultados <span class="highlight">vocacionales</span></h1>
           <p class="hero-subtitle">
-            {{ profile?.email || 'Completa tu perfil' }} · {{ getGradeLabel(profile?.grade) || 'Sin grado definido' }}
+            {{ profile?.name || profile?.email || 'Completa tu perfil' }} · {{ getGradeLabel(profile?.grade) || 'Sin grado definido' }}
           </p>
+          
           <div class="hero-actions">
-            <button class="primary-action" (click)="takeVocationalTest()">Realizar test vocacional</button>
+            <!-- Grupo de acciones principales -->
+            <div class="button-group">
+              <button class="primary-action" (click)="takeVocationalTest()">Realizar test vocacional</button>
+              
+              @if (lastAssessmentId) {
+                <button class="secondary-action" (click)="viewLastResult()">Ver último resultado</button>
+              } @else {
+                <button class="secondary-action" (click)="refreshRecommendations()">Actualizar recomendaciones</button>
+              }
+            </div>
             
-            @if (lastAssessmentId) {
-              <button class="secondary-action" (click)="viewLastResult()">Ver último resultado</button>
-            } @else {
-              <button class="secondary-action" (click)="refreshRecommendations()">Actualizar recomendaciones</button>
-            }
-            
+            <!-- Acción secundaria separada visualmente -->
             <button class="secondary-action" (click)="logout()">Cerrar sesión</button>
           </div>
         </div>
@@ -58,6 +63,7 @@ import { UserProfile } from '../../core/validators/models/profile.models';
             </header>
             
             <div class="profile-body">
+              <p><strong>Nombre:</strong> {{ profile.name || 'No definido' }}</p>
               <p><strong>Edad:</strong> {{ profile.age ?? '--' }} años</p>
               <p><strong>Grado:</strong> {{ getGradeLabel(profile.grade) || 'No definido' }}</p>
               <p><strong>Intereses:</strong> {{ profile.interests.length ? profile.interests.join(', ') : 'Sin intereses' }}</p>
@@ -83,6 +89,14 @@ import { UserProfile } from '../../core/validators/models/profile.models';
                     <button type="button" class="close-btn" (click)="cancelProfileConfig()" [disabled]="editStatus === 'saving'">✕</button>
                   </div>
                   
+                  <label class="field">
+                    <span>Nombre completo</span>
+                    <input type="text" formControlName="fullName" placeholder="Tu nombre" />
+                    @if (profileConfigForm.controls['fullName'].touched && profileConfigForm.controls['fullName'].hasError('required')) {
+                      <small class="field-error">El nombre es obligatorio.</small>
+                    }
+                  </label>
+
                   <label class="field">
                     <span>Edad estimada</span>
                     <input type="number" formControlName="age" min="14" placeholder="Ej: 18" />
@@ -133,8 +147,8 @@ import { UserProfile } from '../../core/validators/models/profile.models';
                     <button type="button" class="secondary-action" (click)="cancelProfileConfig()" [disabled]="editStatus === 'saving'">
                       Cancelar
                     </button>
-                    
-                    <button class="primary-action" type="submit" 
+
+                    <button class="primary-action" type="submit"
                             [disabled]="profileConfigForm.invalid || editStatus === 'saving' || editStatus === 'success'">
                       @switch (editStatus) {
                         @case ('saving') { Guardando... }
@@ -219,7 +233,6 @@ export class HomePageComponent implements OnInit {
 
   interestOptions: string[] = Object.keys(INTEREST_AREA_CATALOG);
 
-  // ACTUALIZADO: Lista completa de grados incluyendo hasta UNIVERSIDAD_6_MAS
   gradeOptions = [
     { value: 'SECUNDARIA_1', label: '1° de secundaria' },
     { value: 'SECUNDARIA_2', label: '2° de secundaria' },
@@ -248,6 +261,7 @@ export class HomePageComponent implements OnInit {
     private fb: FormBuilder
   ) {
     this.profileConfigForm = this.fb.group({
+      fullName: ['', Validators.required],
       age: [null, [Validators.required, Validators.min(14)]],
       grade: ['', Validators.required],
       interests: [[], Validators.required]
@@ -361,6 +375,11 @@ export class HomePageComponent implements OnInit {
     this.editingProfile = false;
   }
 
+  goToHome(): void {
+    this.editingProfile = false;
+    this.router.navigate(['/']);
+  }
+
   isInterestSelected(interest: string): boolean {
     const currentInterests = this.profileConfigForm.controls['interests'].value as string[] || [];
     return currentInterests.includes(interest);
@@ -387,10 +406,9 @@ export class HomePageComponent implements OnInit {
       return;
     }
 
-    // Usamos getRawValue para asegurar que obtenemos el valor aunque estuviera deshabilitado
     const rawValue = this.profileConfigForm.getRawValue();
     
-    // Forzamos conversión de tipos para asegurar que el payload es exacto
+    const fullName = rawValue.fullName?.trim();
     const age = Number(rawValue.age); 
     const grade = (rawValue.grade ?? '').trim();
     const interests = rawValue.interests as string[] || [];
@@ -413,39 +431,59 @@ export class HomePageComponent implements OnInit {
       })
       .subscribe({
         next: (response) => {
-          this.profile = response.profile;
-          
-          // Verificar si el backend realmente guardó el cambio comparando
-          if (this.profile.grade !== grade) {
-             console.warn('El backend devolvió un grado diferente al enviado:', this.profile.grade);
-             // Opcional: podrías mostrar un warning aquí si fuera crítico
-          }
-
-          this.editStatus = 'success';
-          this.editFeedback = '¡Perfil actualizado correctamente!';
-          this.syncProfileForm();
-          
-          const areaIds = extractAreaIds(this.profile.interests);
-          if (areaIds) {
-            this.recommendationMessage = 'Tus intereses ya alimentan recomendaciones específicas.';
-            this.fetchRecommendations(areaIds);
+          if (fullName && fullName !== this.profile?.name) {
+             this.updatePersonalData(fullName, response.profile);
           } else {
-            this.recommendationMessage = 'Actualiza tus intereses para afinar el mapa vocacional.';
+             this.finalizeUpdate(response.profile);
           }
-
-          setTimeout(() => {
-            this.editingProfile = false;
-            this.profileConfigForm.enable();
-            this.editStatus = 'idle';
-            this.editFeedback = '';
-          }, 1500);
         },
         error: (error: Error) => {
-          this.editStatus = 'error';
-          this.editFeedback = error.message || 'Error al guardar los cambios.';
-          this.profileConfigForm.enable();
+          this.handleUpdateError(error);
         }
       });
+  }
+
+  private updatePersonalData(newName: string, currentProfile: UserProfile): void {
+    this.profileService.patchPersonalData({ 
+      name: newName, 
+      preferences: currentProfile.preferences || {} 
+    }).subscribe({
+      next: (response) => {
+        this.finalizeUpdate(response.profile);
+      },
+      error: (error: Error) => {
+        console.error('Error actualizando nombre:', error);
+        this.finalizeUpdate(currentProfile, 'Perfil actualizado, pero hubo un error al guardar el nombre.');
+      }
+    });
+  }
+
+  private finalizeUpdate(profile: UserProfile, customMessage?: string): void {
+    this.profile = profile;
+    this.editStatus = 'success';
+    this.editFeedback = customMessage || '¡Perfil actualizado correctamente!';
+    this.syncProfileForm();
+    
+    const areaIds = extractAreaIds(this.profile.interests);
+    if (areaIds) {
+      this.recommendationMessage = 'Tus intereses ya alimentan recomendaciones específicas.';
+      this.fetchRecommendations(areaIds);
+    } else {
+      this.recommendationMessage = 'Actualiza tus intereses para afinar el mapa vocacional.';
+    }
+
+    setTimeout(() => {
+      this.editingProfile = false;
+      this.profileConfigForm.enable();
+      this.editStatus = 'idle';
+      this.editFeedback = '';
+    }, 1500);
+  }
+
+  private handleUpdateError(error: Error): void {
+    this.editStatus = 'error';
+    this.editFeedback = error.message || 'Error al guardar los cambios.';
+    this.profileConfigForm.enable();
   }
 
   deleteAccount(): void {
@@ -480,6 +518,7 @@ export class HomePageComponent implements OnInit {
 
   private syncProfileForm(): void {
     this.profileConfigForm.patchValue({
+      fullName: this.profile?.name ?? '',
       age: this.profile?.age ?? null,
       grade: this.profile?.grade ?? '',
       interests: this.profile?.interests ?? []
