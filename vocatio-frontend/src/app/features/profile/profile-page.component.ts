@@ -280,11 +280,16 @@ export class ProfilePageComponent implements OnInit {
     this.editFeedback = customMessage || '¡Perfil actualizado correctamente!';
     this.syncForm();
 
+    // Señalar al Home que refresque el dashboard inmediatamente
+    try { localStorage.setItem('vocatio:refresh:home', '1'); } catch {}
+
     setTimeout(() => {
       this.editing = false;
       this.form.enable();
       this.status = 'idle';
       this.editFeedback = '';
+      // Navegar de vuelta al Home con query param para refresco explícito
+      this.router.navigate(['/home'], { queryParams: { refresh: 1 } });
     }, 1500);
   }
 

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
@@ -45,18 +45,18 @@ interface AttemptItem {
             <label style="display:grid; gap:4px;">
               <span style="font-size:12px; color:#6b7280;">Estado</span>
               <select [(ngModel)]="statusFilter" (change)="onFiltersChanged()" style="padding:8px; border:1px solid #d1d5db; border-radius:8px;">
-                <option value="all">Todos</option>
+                <option value="all" [selected]="statusFilter==='all'">Todos</option>
                 <option value="completed">Completados</option>
                 <option value="in-progress">En progreso</option>
               </select>
             </label>
             <label style="display:grid; gap:4px;">
               <span style="font-size:12px; color:#6b7280;">Desde</span>
-              <input type="date" [(ngModel)]="fromDate" (change)="onFiltersChanged()" style="padding:8px; border:1px solid #d1d5db; border-radius:8px;" />
+              <input type="date" [(ngModel)]="fromDate" (change)="onFiltersChanged()" [value]="fromDate" style="padding:8px; border:1px solid #d1d5db; border-radius:8px;" />
             </label>
             <label style="display:grid; gap:4px;">
               <span style="font-size:12px; color:#6b7280;">Hasta</span>
-              <input type="date" [(ngModel)]="toDate" (change)="onFiltersChanged()" style="padding:8px; border:1px solid #d1d5db; border-radius:8px;" />
+              <input type="date" [(ngModel)]="toDate" (change)="onFiltersChanged()" [value]="toDate" style="padding:8px; border:1px solid #d1d5db; border-radius:8px;" />
             </label>
             <label style="display:grid; gap:4px; min-width:200px; flex:1;">
               <span style="font-size:12px; color:#6b7280;">Buscar por ID</span>
@@ -100,6 +100,8 @@ export class HistoryPageComponent implements OnInit {
   attempts: AttemptItem[] = [];
   deleting: Record<string, boolean> = {};
   deletingAll = false;
+  loading = false;
+  private cacheKey = 'vocatio:cache:assessments';
 
   pageIndex = 0;
   pageSize = 5;
@@ -113,28 +115,69 @@ export class HistoryPageComponent implements OnInit {
   constructor(
     private testService: TestService,
     private session: SessionService,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
+    this.clearFilters();
+    this.loadFromCache();
     this.loadAttempts();
   }
 
-  private loadAttempts(): void {
+  private loadFromCache(): void {
+    try {
+      const raw = localStorage.getItem(this.cacheKey);
+      if (!raw) return;
+      const cached = JSON.parse(raw) as Array<{ id: string; status: string; completedAt?: string; updatedAt?: string }>;
+      if (!Array.isArray(cached) || !cached.length) return;
+      const sorted = [...cached].sort((a, b) => {
+        const da = (a.completedAt || a.updatedAt) ? new Date(a.completedAt || a.updatedAt!).getTime() : 0;
+        const db = (b.completedAt || b.updatedAt) ? new Date(b.completedAt || b.updatedAt!).getTime() : 0;
+        return db - da;
+      });
+      this.attempts = sorted.map(a => ({ id: a.id, status: a.status, completedAt: a.completedAt || a.updatedAt }));
+      this.pageIndex = 0;
+      this.clearFilters();
+      this.cdr.detectChanges();
+    } catch {}
+  }
+
+  private loadAttempts(retries: number = 3, delayMs: number = 300): void {
     const token = this.session.getAccessToken();
     if (!token) { this.router.navigate(['/auth/login']); return; }
+    this.loading = true;
     this.testService.listAssessments(token).subscribe({
       next: (raw) => {
+        console.log('Historial: recibidos', Array.isArray(raw) ? raw.length : 0, 'intentos');
+        // Usar completedAt con fallback a updatedAt para ordenar y mostrar
         const sorted = [...raw].sort((a, b) => {
-          const da = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-          const db = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+          const da = (a.completedAt || (a as any).updatedAt) ? new Date(a.completedAt || (a as any).updatedAt).getTime() : 0;
+          const db = (b.completedAt || (b as any).updatedAt) ? new Date(b.completedAt || (b as any).updatedAt).getTime() : 0;
           return db - da;
         });
-        this.attempts = sorted.map(a => ({ id: a.id, status: a.status, completedAt: a.completedAt }));
+        this.attempts = sorted.map(a => ({ id: a.id, status: a.status, completedAt: a.completedAt || (a as any).updatedAt }));
         this.pageIndex = 0;
+        // Mostrar por defecto todos los intentos (sin filtros activos)
+        this.clearFilters();
+        this.cdr.detectChanges();
+        this.loading = false;
+        // Cachear para mostrar instantáneamente la próxima vez
+        try {
+          const cachePayload = raw.map((a: any) => ({ id: a.id, status: a.status, completedAt: a.completedAt, updatedAt: a.updatedAt }));
+          localStorage.setItem(this.cacheKey, JSON.stringify(cachePayload));
+        } catch {}
+        // Si no hay intentos aún, realizar un reintento breve para capturar datos recién persistidos
+        if (!this.attempts.length && retries > 0) {
+          setTimeout(() => this.loadAttempts(retries - 1, Math.floor(delayMs * 1.5)), delayMs);
+        }
       },
       error: (err: Error) => {
         console.error('Error loading attempts', err);
+        this.loading = false;
+        if (retries > 0) {
+          setTimeout(() => this.loadAttempts(retries - 1, Math.floor(delayMs * 1.5)), delayMs);
+        }
       }
     });
   }
@@ -152,11 +195,11 @@ export class HistoryPageComponent implements OnInit {
     // Date range over completedAt
     if (this.fromDate) {
       const fromTs = new Date(this.fromDate).setHours(0,0,0,0);
-      list = list.filter(a => !a.completedAt || new Date(a.completedAt).getTime() >= fromTs);
+      list = list.filter(a => a.completedAt && new Date(a.completedAt).getTime() >= fromTs);
     }
     if (this.toDate) {
       const toTs = new Date(this.toDate).setHours(23,59,59,999);
-      list = list.filter(a => !a.completedAt || new Date(a.completedAt).getTime() <= toTs);
+      list = list.filter(a => a.completedAt && new Date(a.completedAt).getTime() <= toTs);
     }
     return list;
   }

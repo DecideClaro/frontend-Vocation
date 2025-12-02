@@ -17,21 +17,17 @@ import { UserProfile } from '../../core/validators/models/profile.models';
   imports: [CommonModule, ReactiveFormsModule],
   template: `
     <main class="home-shell">
-      <header class="home-header">
-        <div class="header-info">
-          <p class="eyebrow">Vocatio</p>
-          <h2>Panel principal</h2>
-        </div>
-        <div class="header-meta">
-          <p class="header-message">
-            Sigue tus resultados y recomendaciones vocacionales desde un solo lugar.
-          </p>
-          <button class="secondary-action small logout-action" type="button" (click)="logout()">
-            Cerrar sesión
-          </button>
-        </div>
-      </header>
-
+        <section class="card" style="margin-bottom:16px; padding:24px 28px; background:#ffffff; border-radius:16px; box-shadow: 0 8px 24px rgba(0,0,0,0.06);">
+          <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <p class="eyebrow" style="letter-spacing:0.06em;">VOCATIO</p>
+              <h2 style="font-size:34px; line-height:42px;">Panel principal</h2>
+            </div>
+            <div class="header-tip" style="max-width:420px;">
+              <p class="subtitle" style="margin:0; font-size:17px; color:#374151;">Sigue tus resultados y recomendaciones vocacionales desde un solo lugar.</p>
+            </div>
+          </div>
+        </section>
       <section class="hero-section" id="hero-section">
         <div class="hero-content">
           <p class="eyebrow">Descubre tu camino</p>
@@ -56,6 +52,7 @@ import { UserProfile } from '../../core/validators/models/profile.models';
         </div>
       </section>
 
+      <!-- Resumen integrado dentro de la tarjeta de Perfil -->
       <!-- Dashboard estilo tarjetas como el ejemplo -->
       <section class="recommended-tiles">
         <header class="section-header">
@@ -83,27 +80,61 @@ import { UserProfile } from '../../core/validators/models/profile.models';
       </section>
 
       <section class="dashboard-grid quick-cards">
-        <article class="status-card streak-card">
-          <p class="eyebrow">Racha</p>
-          <div class="status-content">
-            <div class="status-item">
-              <span class="status-value">{{ streakDays }}</span>
-              <span class="status-label">días</span>
-            </div>
-            <div class="status-actions">
-              <button class="secondary-action small" type="button" (click)="viewAchievements()">Ver logros</button>
-            </div>
-          </div>
-        </article>
 
         <article class="profile-card mini">
           <p class="eyebrow">Perfil</p>
-          <div class="profile-body">
-            <div class="avatar" style="width:64px;height:64px;border-radius:50%;background:#e5e7eb;margin:8px 0;"></div>
-            <p>{{ profile?.name || profile?.email || 'Sin nombre' }}</p>
-          </div>
-          <div class="card-actions">
-            <button class="secondary-action small" type="button" (click)="viewMaterials()">Ver materiales</button>
+          <div class="profile-body profile-header">
+            <div class="avatar" style="width:64px;height:64px;border-radius:50%;background:#e5e7eb;"></div>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div>
+                <div style="font-weight:600;">{{ profile?.name || profile?.email || 'Sin nombre' }}</div>
+                <small>{{ getGradeLabel(profile?.grade) || 'Sin grado definido' }}</small>
+              </div>
+
+              <div class="summary-grid">
+                <article class="status-card mini" style="display:flex; flex-direction:column; justify-content:center; min-height:120px;">
+                  <p class="eyebrow">Último intento</p>
+                  <div>
+                    <div style="font-weight:600;">{{ lastAttemptLabel }}</div>
+                    <small>{{ lastAttemptDateLabel }}</small>
+                  </div>
+                </article>
+                <article class="status-card mini" style="display:flex; flex-direction:column; justify-content:center; min-height:120px;">
+                  <p class="eyebrow">Favoritos</p>
+                  <div>
+                    <div style="font-weight:600;">{{ favoritesCount }}</div>
+                    <small>Carreras marcadas</small>
+                  </div>
+                </article>
+                @if (lastResult) {
+                  <article class="status-card mini" style="display:flex; flex-direction:column; justify-content:space-between; min-height:120px;">
+                    <p class="eyebrow">Resultado</p>
+                    <div>
+                      <div style="font-weight:600;">{{ lastResult?.mbtiProfile || '—' }}</div>
+                      <small>Ver detalle</small>
+                    </div>
+                    <div class="card-actions" style="margin-top:8px;">
+                      <button class="secondary-action small" (click)="viewLastResult()">Abrir resultado</button>
+                    </div>
+                  </article>
+                } @else {
+                  <article class="status-card mini" style="display:flex; flex-direction:column; justify-content:space-between; min-height:120px;">
+                    <p class="eyebrow">Materiales</p>
+                    <div>
+                      <small>Explora materiales y/o realiza el test para sugerencias.</small>
+                    </div>
+                    <div class="card-actions" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                      <button class="secondary-action small" type="button" (click)="viewMaterials()">Ver materiales</button>
+                      <button class="primary-action small" type="button" (click)="takeVocationalTest()">Realizar test</button>
+                    </div>
+                  </article>
+                }
+              </div>
+              <div class="profile-actions">
+                <button class="secondary-action small" type="button" (click)="viewCareers()">Ver carreras</button>
+                <button class="secondary-action small" type="button" (click)="viewMaterials()">Ver materiales</button>
+              </div>
+            </div>
           </div>
         </article>
 
@@ -176,7 +207,6 @@ export class HomePageComponent implements OnInit {
   completedAttempts: any[] = [];
   // Historial embebido eliminado; usar página dedicada /history
   readonly testGoal = 30;
-  streakDays = 0;
   heroCards = [
     { label: 'INTJ', class: 'analyst' },
     { label: 'ENFP', class: 'diplomat' },
@@ -191,6 +221,9 @@ export class HomePageComponent implements OnInit {
   editFeedback = '';
   deletingAccount = false;
   lastAssessmentId?: string;
+  lastResult?: any;
+  private assessmentsCacheKey = 'vocatio:cache:assessments';
+  private resultCacheKey = (id: string) => `vocatio:cache:result:${id}`;
   viewingProfile = false; // Declare the viewingProfile boolean
   get hasCompletedAttempts(): boolean { return this.completedAttempts.length > 0; }
   get greeting(): string {
@@ -281,14 +314,74 @@ export class HomePageComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadProfile();
+    // Suscribirse al estado compartido de perfil para evitar parpadeo
+    this.profileService.profile$.subscribe(p => {
+      if (p) {
+        this.profile = p;
+      }
+    });
     this.checkAssessments();
+    this.loadFavoritesCount();
+    // Intento de carga instantánea desde caché para evitar demoras visuales
+    this.loadFromCache();
+    // Asegurar carga inicial completa (perfil, intentos, resultado) cuando hay token
+    this.ensureInitialData();
+    // Refrescar si hay bandera de actualización desde otras páginas
+    try {
+      const flag = localStorage.getItem('vocatio:refresh:home');
+      if (flag === '1') {
+        localStorage.removeItem('vocatio:refresh:home');
+        this.loadProfile();
+        this.checkAssessments();
+        this.loadFavoritesCount();
+        this.ensureInitialData();
+      }
+    } catch {}
+    // Refrescar resumen al volver a Home o cambiar de sección
+    this.router.events.subscribe(evt => {
+      try {
+        const url = (this.router.url || '').toLowerCase();
+        if (url === '/' || url.startsWith('/home')) {
+          this.loadProfile();
+          this.checkAssessments();
+          this.loadFavoritesCount();
+          this.ensureInitialData();
+        }
+      } catch {}
+    });
     // Reaccionar a solicitudes de refresco vía query params
     this.route.queryParamMap.subscribe(params => {
       if (params.has('refresh')) {
         console.log('Refrescando historial por query param refresh');
         this.checkAssessments();
+        this.loadProfile();
+        this.loadFavoritesCount();
+        this.ensureInitialData();
       }
     });
+  }
+
+  private loadFromCache(): void {
+    try {
+      const raw = localStorage.getItem(this.assessmentsCacheKey);
+      if (raw) {
+        const list = JSON.parse(raw) as Array<{ id: string; status: string; completedAt?: string; updatedAt?: string }>;
+        if (Array.isArray(list) && list.length) {
+          const completed = list.filter(a => (a.status || '').toUpperCase() === 'COMPLETED');
+          const sorted = completed.slice().sort((a, b) => Number(b.id) - Number(a.id));
+          if (sorted.length) {
+            this.lastAssessmentId = sorted[0].id;
+            this.completedAttempts = sorted.map(a => ({ id: a.id, completedAt: a.completedAt || a.updatedAt }));
+            this.refreshLastAttemptLabels();
+            // Intentar cargar resultado desde caché
+            const rraw = localStorage.getItem(this.resultCacheKey(this.lastAssessmentId));
+            if (rraw) {
+              this.lastResult = JSON.parse(rraw);
+            }
+          }
+        }
+      }
+    } catch {}
   }
 
   getGradeLabel(value?: string): string {
@@ -308,7 +401,7 @@ export class HomePageComponent implements OnInit {
         console.log('Todos los assessments:', assessments);
         console.log('Total de assessments recibidos:', assessments.length);
         
-        const completed = assessments.filter(a => a.status === 'COMPLETED');
+        const completed = assessments.filter(a => (a.status || '').toUpperCase() === 'COMPLETED');
         console.log('Assessments completados:', completed);
         console.log('Total completados:', completed.length);
         
@@ -317,7 +410,7 @@ export class HomePageComponent implements OnInit {
           console.log('IDs de completados (antes de ordenar):', completed.map(a => a.id));
           
           // Ordenar por ID descendente para obtener el más reciente
-          const sorted = completed.sort((a, b) => Number(b.id) - Number(a.id));
+          const sorted = completed.slice().sort((a, b) => Number(b.id) - Number(a.id));
           
           console.log('IDs de completados (después de ordenar):', sorted.map(a => a.id));
           console.log('El primero (más reciente) es:', sorted[0].id);
@@ -328,9 +421,17 @@ export class HomePageComponent implements OnInit {
             // Algunos backends no exponen completedAt en el resumen; usar fallback si no está
             completedAt: (a as any).completedAt ?? (a as any).updatedAt ?? undefined 
           }));
+          // Cachear assessments para carga instantánea futura
+          try {
+            const cachePayload = assessments.map((a: any) => ({ id: a.id, status: a.status, completedAt: a.completedAt, updatedAt: a.updatedAt }));
+            localStorage.setItem(this.assessmentsCacheKey, JSON.stringify(cachePayload));
+          } catch {}
+          // Refrescar labels de intento
+          this.refreshLastAttemptLabels();
+          // Cargar resultado del último intento
+          this.loadLastResult();
           // Historial embebido eliminado; no hay paginación local que reiniciar
           console.log('lastAssessmentId asignado:', this.lastAssessmentId);
-          this.computeStreakFromAttempts();
           // Limpiar cualquier mensaje anterior si hay intentos
           if (this.statusMessage?.includes('No hay intentos')) {
             this.statusMessage = '';
@@ -348,33 +449,47 @@ export class HomePageComponent implements OnInit {
           // Asegurar que el botón muestre "Actualizar recomendaciones" y no "Ver último resultado"
           this.lastAssessmentId = undefined;
           this.completedAttempts = [];
-          this.streakDays = 0;
+          
           // Mensaje claro para el usuario cuando no hay intentos
           this.statusMessage = 'sin intentos, realice uno nuevo';
+          this.refreshLastAttemptLabels();
+          this.lastResult = undefined;
         }
       },
       error: (err) => console.error('Error verificando historial', err)
     });
   }
 
-  private computeStreakFromAttempts(): void {
+  private loadLastResult(): void {
     try {
-      const dateKeys = new Set(
-        this.completedAttempts
-          .map(a => a.completedAt ? new Date(a.completedAt).toISOString().slice(0, 10) : undefined)
-          .filter((d): d is string => !!d)
-      );
-      let streak = 0;
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      while (dateKeys.has(new Date(d).toISOString().slice(0, 10))) {
-        streak++;
-        d.setDate(d.getDate() - 1);
-      }
-      this.streakDays = streak;
-    } catch {
-      this.streakDays = 0;
-    }
+      const token = this.session.getAccessToken();
+      if (!token || !this.lastAssessmentId) return;
+      const attemptFetch = (retries = 3, delayMs = 300) => {
+        this.testService.fetchResult(this.lastAssessmentId!, token).subscribe({
+          next: (res: any) => { 
+            this.lastResult = res; 
+            try { localStorage.setItem(this.resultCacheKey(this.lastAssessmentId!), JSON.stringify(res)); } catch {}
+          },
+          error: () => {
+            if (retries > 0) {
+              setTimeout(() => attemptFetch(retries - 1, delayMs * 1.5), delayMs);
+            } else {
+              this.lastResult = undefined;
+            }
+          }
+        });
+      };
+      attemptFetch();
+    } catch { this.lastResult = undefined; }
+  }
+
+  // For login → home scenarios: on first load, if token exists but profile/result are empty, kick off loads
+  private ensureInitialData(): void {
+    const hasToken = !!this.session.getAccessToken();
+    if (!hasToken) return;
+    if (!this.profile) this.loadProfile();
+    if (!this.completedAttempts?.length) this.checkAssessments();
+    if (this.lastAssessmentId && !this.lastResult) this.loadLastResult();
   }
 
   viewLastResult(): void {
@@ -390,6 +505,26 @@ export class HomePageComponent implements OnInit {
       // Lanzar una recarga de historial inmediata
       this.checkAssessments();
     }
+  }
+  // Resumen: últimos intentos y favoritos
+  get lastAttemptLabel(): string {
+    if (this.completedAttempts.length === 0) return 'Sin intentos';
+    return 'Completado';
+  }
+  get lastAttemptDateLabel(): string {
+    if (this.completedAttempts.length === 0) return '';
+    const d = this.completedAttempts[0]?.completedAt ? new Date(this.completedAttempts[0].completedAt) : undefined;
+    return d && !isNaN(d.getTime()) ? d.toLocaleString() : '';
+  }
+  private refreshLastAttemptLabels(): void { /* computed via getters */ }
+  favoritesCount = 0;
+  private favKey = 'vocatio:favorites:careers';
+  private loadFavoritesCount(): void {
+    try {
+      const raw = localStorage.getItem(this.favKey);
+      const list = raw ? JSON.parse(raw) : [];
+      this.favoritesCount = Array.isArray(list) ? list.length : 0;
+    } catch { this.favoritesCount = 0; }
   }
 
   openHistory(): void {
@@ -462,11 +597,15 @@ export class HomePageComponent implements OnInit {
   }
 
   viewAchievements(): void {
-    this.router.navigate(['/achievements']);
+    /* eliminado */
   }
 
   viewMaterials(): void {
     this.router.navigate(['/materials']);
+  }
+
+  viewCareers(): void {
+    this.router.navigate(['/careers']);
   }
 
   logout(): void {

@@ -5,6 +5,7 @@ import { authGuard } from './core/guards/auth.guard';
 import { profileRoutes } from './features/profile/profile.routes';
 import { achievementsRoutes } from './features/achievements/achievements.routes';
 import { materialsRoutes } from './features/materials/materials.routes';
+import { careersRoutes } from './features/careers/careers.routes';
 import { historyRoutes } from './features/history/history.routes';
 
 export const routes: Routes = [
@@ -13,6 +14,7 @@ export const routes: Routes = [
   ...profileRoutes,
   ...achievementsRoutes,
   ...materialsRoutes,
+  ...careersRoutes,
   ...historyRoutes,
   {
     path: 'home',
