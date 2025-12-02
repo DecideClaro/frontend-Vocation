@@ -269,6 +269,7 @@ export const homePageStyles = `
     background: var(--analyst-purple);
     color: white;
     border: none;
+    size: 120%;
     padding: 0.75rem 1.5rem;
     border-radius: 99px;
     font-weight: 700;
@@ -276,6 +277,9 @@ export const homePageStyles = `
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
     font-family: var(--font-family-base);
+
+     padding: 1rem 2rem; 
+     font-size: 1.1rem;
   }
   
   .primary-action:hover {
@@ -303,6 +307,9 @@ export const homePageStyles = `
     color: var(--text-color);
     transition: all 0.2s;
     font-family: var(--font-family-base);
+    
+    padding: 1rem 2rem; 
+    font-size: 1.1rem;
   }
 
   .secondary-action:hover {
