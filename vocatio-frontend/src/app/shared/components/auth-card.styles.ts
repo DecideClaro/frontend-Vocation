@@ -193,9 +193,10 @@ export const authCardStyles = `
 .policy-list {
   margin-top: 1rem;
   font-size: 0.85rem;
-  color: #718096;
+  color: #e53e3e;
   display: grid;
   gap: 0.25rem;
+  font-weight: 600;
 }
 
 .policy-list li {

@@ -22,9 +22,14 @@ import { UserProfile } from '../../core/validators/models/profile.models';
           <p class="eyebrow">Vocatio</p>
           <h2>Panel principal</h2>
         </div>
-        <p class="header-message">
-          Sigue tus resultados y recomendaciones vocacionales desde un solo lugar.
-        </p>
+        <div class="header-meta">
+          <p class="header-message">
+            Sigue tus resultados y recomendaciones vocacionales desde un solo lugar.
+          </p>
+          <button class="secondary-action small logout-action" type="button" (click)="logout()">
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
       <section class="hero-section" id="hero-section">

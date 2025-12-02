@@ -26,6 +26,13 @@ export const homePageStyles = `
     gap: 0.5rem;
   }
 
+  .header-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+
   .home-header h2 {
     margin: 0;
     color: var(--text-color);
@@ -38,6 +45,17 @@ export const homePageStyles = `
     font-size: 1rem;
   }
 
+  .logout-action {
+    border-color: #e2e8f0;
+    color: #ef4444;
+  }
+
+  .logout-action:hover {
+    border-color: #ef4444;
+    color: #b91c1c;
+    background: #fef2f2;
+  }
+
   @media (min-width: 768px) {
     .home-header {
       flex-direction: row;
@@ -48,6 +66,11 @@ export const homePageStyles = `
 
     .header-message {
       max-width: 380px;
+      text-align: right;
+    }
+
+    .header-meta {
+      align-items: flex-end;
       text-align: right;
     }
   }
