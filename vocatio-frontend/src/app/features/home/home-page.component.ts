@@ -17,16 +17,17 @@ import { UserProfile } from '../../core/validators/models/profile.models';
   imports: [CommonModule, ReactiveFormsModule],
   template: `
     <main class="home-shell">
-      <header class="home-header">
-        <div class="header-info">
-          <p class="eyebrow">Vocatio</p>
-          <h2>Panel principal</h2>
-        </div>
-        <p class="header-message">
-          Sigue tus resultados y recomendaciones vocacionales desde un solo lugar.
-        </p>
-      </header>
-
+        <section class="card" style="margin-bottom:16px; padding:24px 28px; background:#ffffff; border-radius:16px; box-shadow: 0 8px 24px rgba(0,0,0,0.06);">
+          <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <p class="eyebrow" style="letter-spacing:0.06em;">VOCATIO</p>
+              <h2 style="font-size:34px; line-height:42px;">Panel principal</h2>
+            </div>
+            <div class="header-tip" style="max-width:420px;">
+              <p class="subtitle" style="margin:0; font-size:17px; color:#374151;">Sigue tus resultados y recomendaciones vocacionales desde un solo lugar.</p>
+            </div>
+          </div>
+        </section>
       <section class="hero-section" id="hero-section">
         <div class="hero-content">
           <p class="eyebrow">Descubre tu camino</p>
@@ -51,6 +52,45 @@ import { UserProfile } from '../../core/validators/models/profile.models';
         </div>
       </section>
 
+      <!-- Resumen dinámico -->
+      <section class="card" style="margin-bottom:16px;">
+        <header class="section-header">
+          <h2>Tu resumen</h2>
+        </header>
+        <div style="display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px;">
+          <article class="status-card mini">
+            <p class="eyebrow">Perfil</p>
+            <div>
+              <div style="font-weight:600;">{{ profile?.name || profile?.email || 'Sin nombre' }}</div>
+              <small>{{ getGradeLabel(profile?.grade) || 'Sin grado definido' }}</small>
+            </div>
+          </article>
+          <article class="status-card mini">
+            <p class="eyebrow">Último intento</p>
+            <div>
+              <div style="font-weight:600;">{{ lastAttemptLabel }}</div>
+              <small>{{ lastAttemptDateLabel }}</small>
+            </div>
+          </article>
+          <article class="status-card mini">
+            <p class="eyebrow">Favoritos</p>
+            <div>
+              <div style="font-weight:600;">{{ favoritesCount }}</div>
+              <small>Carreras marcadas</small>
+            </div>
+          </article>
+          <article class="status-card mini" *ngIf="lastResult">
+            <p class="eyebrow">Resultado</p>
+            <div>
+              <div style="font-weight:600;">{{ lastResult?.mbtiProfile || '—' }}</div>
+              <small>Ver detalle</small>
+            </div>
+            <div class="card-actions" style="margin-top:8px;">
+              <button class="secondary-action small" (click)="viewLastResult()">Abrir resultado</button>
+            </div>
+          </article>
+        </div>
+      </section>
       <!-- Dashboard estilo tarjetas como el ejemplo -->
       <section class="recommended-tiles">
         <header class="section-header">
@@ -186,6 +226,7 @@ export class HomePageComponent implements OnInit {
   editFeedback = '';
   deletingAccount = false;
   lastAssessmentId?: string;
+  lastResult?: any;
   viewingProfile = false; // Declare the viewingProfile boolean
   get hasCompletedAttempts(): boolean { return this.completedAttempts.length > 0; }
   get greeting(): string {
@@ -276,7 +317,35 @@ export class HomePageComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadProfile();
+    // Suscribirse al estado compartido de perfil para evitar parpadeo
+    this.profileService.profile$.subscribe(p => {
+      if (p) {
+        this.profile = p;
+      }
+    });
     this.checkAssessments();
+    this.loadFavoritesCount();
+    // Refrescar si hay bandera de actualización desde otras páginas
+    try {
+      const flag = localStorage.getItem('vocatio:refresh:home');
+      if (flag === '1') {
+        localStorage.removeItem('vocatio:refresh:home');
+        this.loadProfile();
+        this.checkAssessments();
+        this.loadFavoritesCount();
+      }
+    } catch {}
+    // Refrescar resumen al volver a Home o cambiar de sección
+    this.router.events.subscribe(evt => {
+      try {
+        const url = (this.router.url || '').toLowerCase();
+        if (url === '/' || url.startsWith('/home')) {
+          this.loadProfile();
+          this.checkAssessments();
+          this.loadFavoritesCount();
+        }
+      } catch {}
+    });
     // Reaccionar a solicitudes de refresco vía query params
     this.route.queryParamMap.subscribe(params => {
       if (params.has('refresh')) {
@@ -303,7 +372,7 @@ export class HomePageComponent implements OnInit {
         console.log('Todos los assessments:', assessments);
         console.log('Total de assessments recibidos:', assessments.length);
         
-        const completed = assessments.filter(a => a.status === 'COMPLETED');
+        const completed = assessments.filter(a => (a.status || '').toUpperCase() === 'COMPLETED');
         console.log('Assessments completados:', completed);
         console.log('Total completados:', completed.length);
         
@@ -312,7 +381,7 @@ export class HomePageComponent implements OnInit {
           console.log('IDs de completados (antes de ordenar):', completed.map(a => a.id));
           
           // Ordenar por ID descendente para obtener el más reciente
-          const sorted = completed.sort((a, b) => Number(b.id) - Number(a.id));
+          const sorted = completed.slice().sort((a, b) => Number(b.id) - Number(a.id));
           
           console.log('IDs de completados (después de ordenar):', sorted.map(a => a.id));
           console.log('El primero (más reciente) es:', sorted[0].id);
@@ -323,6 +392,10 @@ export class HomePageComponent implements OnInit {
             // Algunos backends no exponen completedAt en el resumen; usar fallback si no está
             completedAt: (a as any).completedAt ?? (a as any).updatedAt ?? undefined 
           }));
+          // Refrescar labels de intento
+          this.refreshLastAttemptLabels();
+          // Cargar resultado del último intento
+          this.loadLastResult();
           // Historial embebido eliminado; no hay paginación local que reiniciar
           console.log('lastAssessmentId asignado:', this.lastAssessmentId);
           this.computeStreakFromAttempts();
@@ -346,10 +419,23 @@ export class HomePageComponent implements OnInit {
           this.streakDays = 0;
           // Mensaje claro para el usuario cuando no hay intentos
           this.statusMessage = 'sin intentos, realice uno nuevo';
+          this.refreshLastAttemptLabels();
+          this.lastResult = undefined;
         }
       },
       error: (err) => console.error('Error verificando historial', err)
     });
+  }
+
+  private loadLastResult(): void {
+    try {
+      const token = this.session.getAccessToken();
+      if (!token || !this.lastAssessmentId) return;
+      this.testService.fetchResult(this.lastAssessmentId, token).subscribe({
+        next: (res: any) => { this.lastResult = res; },
+        error: () => { this.lastResult = undefined; }
+      });
+    } catch { this.lastResult = undefined; }
   }
 
   private computeStreakFromAttempts(): void {
@@ -385,6 +471,26 @@ export class HomePageComponent implements OnInit {
       // Lanzar una recarga de historial inmediata
       this.checkAssessments();
     }
+  }
+  // Resumen: últimos intentos y favoritos
+  get lastAttemptLabel(): string {
+    if (this.completedAttempts.length === 0) return 'Sin intentos';
+    return 'Completado';
+  }
+  get lastAttemptDateLabel(): string {
+    if (this.completedAttempts.length === 0) return '';
+    const d = this.completedAttempts[0]?.completedAt ? new Date(this.completedAttempts[0].completedAt) : undefined;
+    return d && !isNaN(d.getTime()) ? d.toLocaleString() : '';
+  }
+  private refreshLastAttemptLabels(): void { /* computed via getters */ }
+  favoritesCount = 0;
+  private favKey = 'vocatio:favorites:careers';
+  private loadFavoritesCount(): void {
+    try {
+      const raw = localStorage.getItem(this.favKey);
+      const list = raw ? JSON.parse(raw) : [];
+      this.favoritesCount = Array.isArray(list) ? list.length : 0;
+    } catch { this.favoritesCount = 0; }
   }
 
   openHistory(): void {
