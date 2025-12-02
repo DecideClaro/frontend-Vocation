@@ -52,45 +52,7 @@ import { UserProfile } from '../../core/validators/models/profile.models';
         </div>
       </section>
 
-      <!-- Resumen dinámico -->
-      <section class="card" style="margin-bottom:16px;">
-        <header class="section-header">
-          <h2>Tu resumen</h2>
-        </header>
-        <div style="display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px;">
-          <article class="status-card mini">
-            <p class="eyebrow">Perfil</p>
-            <div>
-              <div style="font-weight:600;">{{ profile?.name || profile?.email || 'Sin nombre' }}</div>
-              <small>{{ getGradeLabel(profile?.grade) || 'Sin grado definido' }}</small>
-            </div>
-          </article>
-          <article class="status-card mini">
-            <p class="eyebrow">Último intento</p>
-            <div>
-              <div style="font-weight:600;">{{ lastAttemptLabel }}</div>
-              <small>{{ lastAttemptDateLabel }}</small>
-            </div>
-          </article>
-          <article class="status-card mini">
-            <p class="eyebrow">Favoritos</p>
-            <div>
-              <div style="font-weight:600;">{{ favoritesCount }}</div>
-              <small>Carreras marcadas</small>
-            </div>
-          </article>
-          <article class="status-card mini" *ngIf="lastResult">
-            <p class="eyebrow">Resultado</p>
-            <div>
-              <div style="font-weight:600;">{{ lastResult?.mbtiProfile || '—' }}</div>
-              <small>Ver detalle</small>
-            </div>
-            <div class="card-actions" style="margin-top:8px;">
-              <button class="secondary-action small" (click)="viewLastResult()">Abrir resultado</button>
-            </div>
-          </article>
-        </div>
-      </section>
+      <!-- Resumen integrado dentro de la tarjeta de Perfil -->
       <!-- Dashboard estilo tarjetas como el ejemplo -->
       <section class="recommended-tiles">
         <header class="section-header">
@@ -118,27 +80,47 @@ import { UserProfile } from '../../core/validators/models/profile.models';
       </section>
 
       <section class="dashboard-grid quick-cards">
-        <article class="status-card streak-card">
-          <p class="eyebrow">Racha</p>
-          <div class="status-content">
-            <div class="status-item">
-              <span class="status-value">{{ streakDays }}</span>
-              <span class="status-label">días</span>
-            </div>
-            <div class="status-actions">
-              <button class="secondary-action small" type="button" (click)="viewAchievements()">Ver logros</button>
-            </div>
-          </div>
-        </article>
 
         <article class="profile-card mini">
           <p class="eyebrow">Perfil</p>
-          <div class="profile-body">
-            <div class="avatar" style="width:64px;height:64px;border-radius:50%;background:#e5e7eb;margin:8px 0;"></div>
-            <p>{{ profile?.name || profile?.email || 'Sin nombre' }}</p>
-          </div>
-          <div class="card-actions">
-            <button class="secondary-action small" type="button" (click)="viewMaterials()">Ver materiales</button>
+          <div class="profile-body" style="display:flex; align-items:flex-start; gap:16px;">
+            <div class="avatar" style="width:64px;height:64px;border-radius:50%;background:#e5e7eb; flex:0 0 auto;"></div>
+            <div style="flex:1; display:flex; flex-direction:column; gap:12px; min-width:0;">
+              <div>
+                <div style="font-weight:600;">{{ profile?.name || profile?.email || 'Sin nombre' }}</div>
+                <small>{{ getGradeLabel(profile?.grade) || 'Sin grado definido' }}</small>
+              </div>
+
+              <div style="display:flex; flex-wrap:wrap; gap:12px;">
+                <article class="status-card mini" style="flex:1 1 180px; min-width:160px;">
+                  <p class="eyebrow">Último intento</p>
+                  <div>
+                    <div style="font-weight:600;">{{ lastAttemptLabel }}</div>
+                    <small>{{ lastAttemptDateLabel }}</small>
+                  </div>
+                </article>
+                <article class="status-card mini" style="flex:1 1 180px; min-width:160px;">
+                  <p class="eyebrow">Favoritos</p>
+                  <div>
+                    <div style="font-weight:600;">{{ favoritesCount }}</div>
+                    <small>Carreras marcadas</small>
+                  </div>
+                </article>
+                <article class="status-card mini" *ngIf="lastResult" style="flex:1 1 180px; min-width:160px;">
+                  <p class="eyebrow">Resultado</p>
+                  <div>
+                    <div style="font-weight:600;">{{ lastResult?.mbtiProfile || '—' }}</div>
+                    <small>Ver detalle</small>
+                  </div>
+                  <div class="card-actions" style="margin-top:8px;">
+                    <button class="secondary-action small" (click)="viewLastResult()">Abrir resultado</button>
+                  </div>
+                </article>
+              </div>
+            </div>
+            <div style="flex:0 0 auto; align-self:center;">
+              <button class="secondary-action small" type="button" (click)="viewMaterials()">Ver materiales</button>
+            </div>
           </div>
         </article>
 
@@ -211,7 +193,6 @@ export class HomePageComponent implements OnInit {
   completedAttempts: any[] = [];
   // Historial embebido eliminado; usar página dedicada /history
   readonly testGoal = 30;
-  streakDays = 0;
   heroCards = [
     { label: 'INTJ', class: 'analyst' },
     { label: 'ENFP', class: 'diplomat' },
@@ -227,6 +208,8 @@ export class HomePageComponent implements OnInit {
   deletingAccount = false;
   lastAssessmentId?: string;
   lastResult?: any;
+  private assessmentsCacheKey = 'vocatio:cache:assessments';
+  private resultCacheKey = (id: string) => `vocatio:cache:result:${id}`;
   viewingProfile = false; // Declare the viewingProfile boolean
   get hasCompletedAttempts(): boolean { return this.completedAttempts.length > 0; }
   get greeting(): string {
@@ -325,6 +308,10 @@ export class HomePageComponent implements OnInit {
     });
     this.checkAssessments();
     this.loadFavoritesCount();
+    // Intento de carga instantánea desde caché para evitar demoras visuales
+    this.loadFromCache();
+    // Asegurar carga inicial completa (perfil, intentos, resultado) cuando hay token
+    this.ensureInitialData();
     // Refrescar si hay bandera de actualización desde otras páginas
     try {
       const flag = localStorage.getItem('vocatio:refresh:home');
@@ -333,6 +320,7 @@ export class HomePageComponent implements OnInit {
         this.loadProfile();
         this.checkAssessments();
         this.loadFavoritesCount();
+        this.ensureInitialData();
       }
     } catch {}
     // Refrescar resumen al volver a Home o cambiar de sección
@@ -343,6 +331,7 @@ export class HomePageComponent implements OnInit {
           this.loadProfile();
           this.checkAssessments();
           this.loadFavoritesCount();
+          this.ensureInitialData();
         }
       } catch {}
     });
@@ -351,8 +340,34 @@ export class HomePageComponent implements OnInit {
       if (params.has('refresh')) {
         console.log('Refrescando historial por query param refresh');
         this.checkAssessments();
+        this.loadProfile();
+        this.loadFavoritesCount();
+        this.ensureInitialData();
       }
     });
+  }
+
+  private loadFromCache(): void {
+    try {
+      const raw = localStorage.getItem(this.assessmentsCacheKey);
+      if (raw) {
+        const list = JSON.parse(raw) as Array<{ id: string; status: string; completedAt?: string; updatedAt?: string }>;
+        if (Array.isArray(list) && list.length) {
+          const completed = list.filter(a => (a.status || '').toUpperCase() === 'COMPLETED');
+          const sorted = completed.slice().sort((a, b) => Number(b.id) - Number(a.id));
+          if (sorted.length) {
+            this.lastAssessmentId = sorted[0].id;
+            this.completedAttempts = sorted.map(a => ({ id: a.id, completedAt: a.completedAt || a.updatedAt }));
+            this.refreshLastAttemptLabels();
+            // Intentar cargar resultado desde caché
+            const rraw = localStorage.getItem(this.resultCacheKey(this.lastAssessmentId));
+            if (rraw) {
+              this.lastResult = JSON.parse(rraw);
+            }
+          }
+        }
+      }
+    } catch {}
   }
 
   getGradeLabel(value?: string): string {
@@ -392,13 +407,17 @@ export class HomePageComponent implements OnInit {
             // Algunos backends no exponen completedAt en el resumen; usar fallback si no está
             completedAt: (a as any).completedAt ?? (a as any).updatedAt ?? undefined 
           }));
+          // Cachear assessments para carga instantánea futura
+          try {
+            const cachePayload = assessments.map((a: any) => ({ id: a.id, status: a.status, completedAt: a.completedAt, updatedAt: a.updatedAt }));
+            localStorage.setItem(this.assessmentsCacheKey, JSON.stringify(cachePayload));
+          } catch {}
           // Refrescar labels de intento
           this.refreshLastAttemptLabels();
           // Cargar resultado del último intento
           this.loadLastResult();
           // Historial embebido eliminado; no hay paginación local que reiniciar
           console.log('lastAssessmentId asignado:', this.lastAssessmentId);
-          this.computeStreakFromAttempts();
           // Limpiar cualquier mensaje anterior si hay intentos
           if (this.statusMessage?.includes('No hay intentos')) {
             this.statusMessage = '';
@@ -416,7 +435,7 @@ export class HomePageComponent implements OnInit {
           // Asegurar que el botón muestre "Actualizar recomendaciones" y no "Ver último resultado"
           this.lastAssessmentId = undefined;
           this.completedAttempts = [];
-          this.streakDays = 0;
+          
           // Mensaje claro para el usuario cuando no hay intentos
           this.statusMessage = 'sin intentos, realice uno nuevo';
           this.refreshLastAttemptLabels();
@@ -431,31 +450,32 @@ export class HomePageComponent implements OnInit {
     try {
       const token = this.session.getAccessToken();
       if (!token || !this.lastAssessmentId) return;
-      this.testService.fetchResult(this.lastAssessmentId, token).subscribe({
-        next: (res: any) => { this.lastResult = res; },
-        error: () => { this.lastResult = undefined; }
-      });
+      const attemptFetch = (retries = 3, delayMs = 300) => {
+        this.testService.fetchResult(this.lastAssessmentId!, token).subscribe({
+          next: (res: any) => { 
+            this.lastResult = res; 
+            try { localStorage.setItem(this.resultCacheKey(this.lastAssessmentId!), JSON.stringify(res)); } catch {}
+          },
+          error: () => {
+            if (retries > 0) {
+              setTimeout(() => attemptFetch(retries - 1, delayMs * 1.5), delayMs);
+            } else {
+              this.lastResult = undefined;
+            }
+          }
+        });
+      };
+      attemptFetch();
     } catch { this.lastResult = undefined; }
   }
 
-  private computeStreakFromAttempts(): void {
-    try {
-      const dateKeys = new Set(
-        this.completedAttempts
-          .map(a => a.completedAt ? new Date(a.completedAt).toISOString().slice(0, 10) : undefined)
-          .filter((d): d is string => !!d)
-      );
-      let streak = 0;
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      while (dateKeys.has(new Date(d).toISOString().slice(0, 10))) {
-        streak++;
-        d.setDate(d.getDate() - 1);
-      }
-      this.streakDays = streak;
-    } catch {
-      this.streakDays = 0;
-    }
+  // For login → home scenarios: on first load, if token exists but profile/result are empty, kick off loads
+  private ensureInitialData(): void {
+    const hasToken = !!this.session.getAccessToken();
+    if (!hasToken) return;
+    if (!this.profile) this.loadProfile();
+    if (!this.completedAttempts?.length) this.checkAssessments();
+    if (this.lastAssessmentId && !this.lastResult) this.loadLastResult();
   }
 
   viewLastResult(): void {
@@ -563,7 +583,7 @@ export class HomePageComponent implements OnInit {
   }
 
   viewAchievements(): void {
-    this.router.navigate(['/achievements']);
+    /* eliminado */
   }
 
   viewMaterials(): void {
